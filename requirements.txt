@@ -1,0 +1,17 @@
+langgraph
+langchain
+chainlit
+google-generativeai
+langchain-google-genai
+tavily-python
+pypdf
+python-docx
+weasyprint
+pydantic
+pydantic-settings
+python-dotenv
+beautifulsoup4
+requests
+tenacity
+markdown
+langgraph-checkpoint-sqlite

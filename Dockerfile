@@ -19,4 +19,4 @@ COPY . .
 EXPOSE 8000
 
 # Command to run chainlit
-CMD ["chainlit", "run", "app.py", "-w", "--port", "8000"]
+CMD ["chainlit", "run", "app.py", "-w", "--port", "8000", "--host", "0.0.0.0"]
