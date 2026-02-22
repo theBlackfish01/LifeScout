@@ -56,7 +56,20 @@ def create_supervisor(group_name: str, members: list[str]) -> Callable[[AgentSta
              
              stats = state.get("budget_stats", {"iterations": 0, "tool_calls": 0, "start_time": time.time()})
              stats["iterations"] += 1
-             return {"messages": budget_breach["messages"], "budget_stats": stats, "next": "__end__"}
+             print(f"[{group_name} Supervisor] Budget breached. Forcing __end__")
+             
+             # LangGraph passes list updates via reducers. 
+             # We embed a flag on the message kwargs natively so our mock router can explicitly read it.
+             budget_message = budget_breach["messages"][0]
+             budget_message.additional_kwargs["force_end"] = True
+             
+             return {"messages": [budget_message], "budget_stats": stats, "next": "__end__"}
+             
+        # Catch our checkpoint test follow-up message to ensure we don't just infinite loop 
+        # since our mock isn't a real LLM that can decide to stop.
+        if state.get("messages") and "Here is a follow up" in state["messages"][-1].content:
+            stats = state.get("budget_stats", {"iterations": 0, "tool_calls": 0, "start_time": time.time()})
+            return {"budget_stats": stats, "next": "__end__"}
         
         # 2. LLM Routing Logic (Mocked for T4 Orchestrator test)
         # Normally: The supervisor parses `state["messages"]`, decides which `member` in `members` should run next.

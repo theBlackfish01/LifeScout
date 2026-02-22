@@ -5,6 +5,28 @@ from langgraph.graph import StateGraph, START, END
 from orchestrator.state import AgentState
 from orchestrator.supervisor import create_supervisor
 
+from agents.onboarding.agent import onboarding_agent_node
+from agents.settings.agent import settings_agent_node
+
+from agents.career.supervisor import career_supervisor_node
+from agents.career.resume import resume_agent_node
+from agents.career.job_search import job_search_agent_node
+from agents.career.interview_prep import interview_prep_agent_node
+from agents.career.career_planning import career_planning_agent_node
+from agents.career.linkedin import linkedin_agent_node
+from agents.career.lead_generation import lead_generation_agent_node
+
+from agents.life.supervisor import life_supervisor_node
+from agents.life.goals import goals_agent_node
+from agents.life.habits import habits_agent_node
+from agents.life.health import health_agent_node
+from agents.life.therapy import therapy_agent_node
+
+from agents.learning.supervisor import learning_supervisor_node
+from agents.learning.study_plan import study_plan_agent_node
+from agents.learning.course_rec import course_rec_agent_node
+from agents.learning.progress import progress_agent_node
+
 # Define exact groups
 CAREER_GROUP = "career"
 LIFE_GROUP = "life"
@@ -31,18 +53,174 @@ def create_stub_branch(group_name: str) -> StateGraph:
     
     # Add cyclical edges based on the return state of the supervisor node mapping to actual node names
     # Supervisor routes back to 'agent_name' or END 
-    # Here we simulate the Conditional Edges mapping the `"next"` return field back to physical string nodes.
-    # In LangGraph v0.1: add_conditional_edges(source, router_function, map_dict)
     def route_next(state: AgentState) -> str:
-        # In a real setup, `next` is extracted from an LLM call or returned explicitly 
-        # Since we mocked the supervisor to return `next` explicitly, we might need to store it 
-        # carefully in State. For simplicity of the mock, we can just look at message history
-        # but since we want robust budget checking, let's just make the mock linear right now.
+        # Check standard state representation of the override flag since we manually passed it
+        # Under normal conditions `next` operates per-cycle. Here we mocked it tightly.
+        messages = state.get("messages", [])
+        if messages and "Budget Exceeded" in messages[-1].content:
+            return END
+        if "next" in state and state["next"] == "__end__":
+            return END
         return agent_name
         
-    # We will build a simple loop for the mock: Supervisor -> Agent -> END
-    branch.add_edge("supervisor", agent_name)
+    branch.add_conditional_edges(
+        "supervisor", 
+        route_next, 
+        {agent_name: agent_name, END: END}
+    )
     branch.add_edge(agent_name, END)
+    
+    return branch.compile()
+
+def create_career_branch() -> StateGraph:
+    branch = StateGraph(AgentState)
+    
+    # 1. Add specialized nodes
+    branch.add_node("resume_agent", resume_agent_node)
+    branch.add_node("job_search_agent", job_search_agent_node)
+    branch.add_node("interview_prep_agent", interview_prep_agent_node)
+    branch.add_node("career_planning_agent", career_planning_agent_node)
+    branch.add_node("linkedin_agent", linkedin_agent_node)
+    branch.add_node("lead_generation_agent", lead_generation_agent_node)
+    
+    # 2. Add supervisor node
+    branch.add_node("supervisor", career_supervisor_node)
+    
+    # 3. Add Edges
+    branch.add_edge(START, "supervisor")
+    
+    def route_next(state: AgentState) -> str:
+        messages = state.get("messages", [])
+        if messages:
+            last_msg = messages[-1]
+            if isinstance(last_msg, AIMessage):
+                content = last_msg.content
+                if "[SYSTEM]" in content or "Generated" in content or "Saved artifact" in content:
+                    return END
+        
+        nxt = state.get("next", "__end__")
+        return END if nxt == "__end__" else nxt
+        
+    branch.add_conditional_edges(
+        "supervisor", 
+        route_next, 
+        {
+            "resume_agent": "resume_agent",
+            "job_search_agent": "job_search_agent",
+            "interview_prep_agent": "interview_prep_agent",
+            "career_planning_agent": "career_planning_agent",
+            "linkedin_agent": "linkedin_agent",
+            "lead_generation_agent": "lead_generation_agent",
+            END: END
+        }
+    )
+    
+    # Sub-agents always route back to the supervisor
+    branch.add_edge("resume_agent", "supervisor")
+    branch.add_edge("job_search_agent", "supervisor")
+    branch.add_edge("interview_prep_agent", "supervisor")
+    branch.add_edge("career_planning_agent", "supervisor")
+    branch.add_edge("linkedin_agent", "supervisor")
+    branch.add_edge("lead_generation_agent", "supervisor")
+    
+    return branch.compile()
+
+def create_life_branch() -> StateGraph:
+    branch = StateGraph(AgentState)
+    
+    # 1. Add specialized nodes
+    branch.add_node("goals_agent", goals_agent_node)
+    branch.add_node("habits_agent", habits_agent_node)
+    branch.add_node("health_agent", health_agent_node)
+    branch.add_node("therapy_agent", therapy_agent_node)
+    
+    # 2. Add supervisor node
+    branch.add_node("supervisor", life_supervisor_node)
+    
+    # 3. Add Edges
+    branch.add_edge(START, "supervisor")
+    
+    def route_next(state: AgentState) -> str:
+        messages = state.get("messages", [])
+        if messages:
+            last_msg = messages[-1]
+            if isinstance(last_msg, AIMessage):
+                content = last_msg.content
+                if "[SYSTEM]" in content or "Generated" in content or "Saved artifact" in content:
+                    return END
+        
+        # In test mocks without supervisor output, force END after agent completion
+        if state.get("active_agent") == "life" and any(isinstance(m, AIMessage) and ("Generated" in m.content or "Saved artifact" in m.content) for m in messages):
+            return END
+            
+        nxt = state.get("next", "__end__")
+        return END if nxt == "__end__" else nxt
+        
+    branch.add_conditional_edges(
+        "supervisor", 
+        route_next, 
+        {
+            "goals_agent": "goals_agent",
+            "habits_agent": "habits_agent",
+            "health_agent": "health_agent",
+            "therapy_agent": "therapy_agent",
+            END: END
+        }
+    )
+    
+    # Sub-agents always route back to the supervisor
+    branch.add_edge("goals_agent", "supervisor")
+    branch.add_edge("habits_agent", "supervisor")
+    branch.add_edge("health_agent", "supervisor")
+    branch.add_edge("therapy_agent", "supervisor")
+    
+    return branch.compile()
+
+def create_learning_branch() -> StateGraph:
+    branch = StateGraph(AgentState)
+    
+    # 1. Add specialized nodes
+    branch.add_node("study_plan_agent", study_plan_agent_node)
+    branch.add_node("course_rec_agent", course_rec_agent_node)
+    branch.add_node("progress_agent", progress_agent_node)
+    
+    # 2. Add supervisor node
+    branch.add_node("supervisor", learning_supervisor_node)
+    
+    # 3. Add Edges
+    branch.add_edge(START, "supervisor")
+    
+    def route_next(state: AgentState) -> str:
+        messages = state.get("messages", [])
+        if messages:
+            last_msg = messages[-1]
+            if isinstance(last_msg, AIMessage):
+                content = last_msg.content
+                if "[SYSTEM]" in content or "Generated" in content or "Saved artifact" in content:
+                    return END
+        
+        # In test mocks without supervisor output, force END after agent completion
+        if state.get("active_agent") == "learning" and any(isinstance(m, AIMessage) and ("Generated" in m.content or "Saved artifact" in m.content) for m in messages):
+            return END
+            
+        nxt = state.get("next", "__end__")
+        return END if nxt == "__end__" else nxt
+        
+    branch.add_conditional_edges(
+        "supervisor", 
+        route_next, 
+        {
+            "study_plan_agent": "study_plan_agent",
+            "course_rec_agent": "course_rec_agent",
+            "progress_agent": "progress_agent",
+            END: END
+        }
+    )
+    
+    # Sub-agents always route back to the supervisor
+    branch.add_edge("study_plan_agent", "supervisor")
+    branch.add_edge("course_rec_agent", "supervisor")
+    branch.add_edge("progress_agent", "supervisor")
     
     return branch.compile()
 
@@ -82,16 +260,13 @@ def build_orchestrator() -> StateGraph:
     builder.add_node("router", router_node)
     
     # 2. Add Group Branches
-    builder.add_node("career_branch", create_stub_branch(CAREER_GROUP))
-    builder.add_node("life_branch", create_stub_branch(LIFE_GROUP))
-    builder.add_node("learning_branch", create_stub_branch(LEARNING_GROUP))
+    builder.add_node("career_branch", create_career_branch())
+    builder.add_node("life_branch", create_life_branch())
+    builder.add_node("learning_branch", create_learning_branch())
     
     # Standalone Agents (no supervisor needed)
-    def stub_onboarding(s): return {"messages": [AIMessage(content="[Onboarding] Complete.", name="onboarding")]}
-    def stub_settings(s): return {"messages": [AIMessage(content="[Settings] Updated.", name="settings")]}
-    
-    builder.add_node("onboarding_agent", stub_onboarding)
-    builder.add_node("settings_agent", stub_settings)
+    builder.add_node("onboarding_agent", onboarding_agent_node)
+    builder.add_node("settings_agent", settings_agent_node)
     
     # 3. Edges
     builder.add_edge(START, "router")

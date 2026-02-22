@@ -7,12 +7,12 @@ class Settings(BaseSettings):
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
 
     # Model Assignments
-    model_orchestrator: str = "gemini-3-flash"
-    model_supervisors: str = "gemini-3-flash"
-    model_onboarding: str = "gemini-3-flash"
-    model_settings: str = "gemini-3-flash"
-    model_low_complexity: str = "gemini-3-flash" # Goals, Habits, Health, Course Rec, Progress
-    model_high_complexity: str = "gemini-3.1-pro"  # Resume, Job Search, Interview Prep, Career Planning, LinkedIn, Study Plan, Therapy, Lead Generation
+    model_orchestrator: str = "gemini-2.0-flash"
+    model_supervisors: str = "gemini-2.0-flash"
+    model_onboarding: str = "gemini-2.0-flash"
+    model_settings: str = "gemini-2.0-flash"
+    model_low_complexity: str = "gemini-2.0-flash" # Goals, Habits, Health, Course Rec, Progress
+    model_high_complexity: str = "gemini-2.0-flash"  # Fallback since pro tier endpoints string might vary. For now just stick to flash for safety.
 
     # File System Root Paths
     data_dir: str = "data"

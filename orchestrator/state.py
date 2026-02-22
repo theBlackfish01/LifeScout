@@ -17,3 +17,4 @@ class AgentState(TypedDict):
     active_agent: str      # E.g., 'career', 'life', 'learning', etc.
     task_id: str           # UUID of the active Task
     budget_stats: BudgetStats
+    next: str              # Routing flag used natively by our sub-graph logic

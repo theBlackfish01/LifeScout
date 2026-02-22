@@ -4,27 +4,22 @@ from typing import Optional
 from config.settings import settings
 
 # Since langgraph v0.1.x, checkpointing relies on checkpointer instances
-# We use langgraph-checkpoint-sqlite which provides SqliteSaver.
+import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
-
-# We keep a singleton pattern or connection factory for our checkpoint database.
-# In a true persistent web app, we'd manage connections carefully (e.g., using AsyncSqliteSaver) 
-# but for our synchronous/simple async MVP, a standard SqliteSaver connecting to a single file is sufficient.
 
 _db_path = Path(settings.checkpoints_dir) / "overall_thread.db"
 
+# We keep a singleton pattern or connection factory for our checkpoint database.
+_conn = None
+
 def get_checkpointer() -> SqliteSaver:
-    """
-    Returns an active SqliteSaver checkpointer instance.
-    Ensure to use as a context manager if required by the graph compile() step,
-    or pass the instance directly depending on langgraph versions.
-    """
-    # Create the checkpoints directory if it doesn't exist
+    global _conn
     _db_path.parent.mkdir(parents=True, exist_ok=True)
+    if _conn is None:
+        # check_same_thread=False is needed for graph execution traversing different threads/async contexts
+        _conn = sqlite3.connect(str(_db_path), check_same_thread=False)
     
-    # We use a memory-safe file SQLite checkpointer.
-    # The SqliteSaver.from_conn_string manages its own SQLite connections efficiently mapping thread_ids.
-    return SqliteSaver.from_conn_string(str(_db_path))
+    return SqliteSaver(_conn)
 
 def get_checkpoint_config(agent_group: str, thread_id: str) -> dict:
     """
