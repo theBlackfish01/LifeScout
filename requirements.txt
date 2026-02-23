@@ -15,3 +15,6 @@ requests
 tenacity
 markdown
 langgraph-checkpoint-sqlite
+fastapi
+uvicorn[standard]
+websockets

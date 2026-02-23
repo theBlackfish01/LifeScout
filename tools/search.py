@@ -53,3 +53,69 @@ def tavily_search(query: str, search_depth: str = "basic") -> str:
         Formatted string containing search summaries and source content.
     """
     return _search_instance.search(query, search_depth)
+
+
+@tool
+def search_jobs(query: str, location: str = "") -> str:
+    """
+    Search for job postings across major job boards.
+    Uses advanced search depth and filters for LinkedIn, Indeed, Glassdoor, and similar platforms.
+    
+    Args:
+        query: Job search query (e.g. "senior Python developer").
+        location: Geographic filter (e.g. "London, UK" or "remote").
+    
+    Returns:
+        Formatted string with job-relevant search results.
+    """
+    full_query = f"{query} {location} job posting".strip()
+    if not _search_instance.client:
+        return json.dumps({"error": "Tavily API key not configured."})
+    try:
+        response = _search_instance.client.search(
+            query=full_query,
+            search_depth="advanced",
+            include_answer=True,
+            include_domains=["linkedin.com/jobs", "indeed.com", "glassdoor.com", "wellfound.com", "remoteok.com"],
+        )
+        results = []
+        if response.get("answer"):
+            results.append(f"AI Summary: {response['answer']}")
+        for res in response.get("results", []):
+            results.append(f"Source: {res.get('url')}\nTitle: {res.get('title', '')}\nContent: {res.get('content')}")
+        return "\n\n---\n\n".join(results) if results else "No job postings found."
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def search_courses(query: str) -> str:
+    """
+    Search for online courses and educational resources.
+    Filters for Coursera, Udemy, edX, Pluralsight, and similar platforms.
+    
+    Args:
+        query: Course topic (e.g. "machine learning beginner").
+    
+    Returns:
+        Formatted string with course-relevant search results.
+    """
+    full_query = f"{query} online course"
+    if not _search_instance.client:
+        return json.dumps({"error": "Tavily API key not configured."})
+    try:
+        response = _search_instance.client.search(
+            query=full_query,
+            search_depth="advanced",
+            include_answer=True,
+            include_domains=["coursera.org", "udemy.com", "edx.org", "pluralsight.com", "linkedin.com/learning"],
+        )
+        results = []
+        if response.get("answer"):
+            results.append(f"AI Summary: {response['answer']}")
+        for res in response.get("results", []):
+            results.append(f"Source: {res.get('url')}\nTitle: {res.get('title', '')}\nContent: {res.get('content')}")
+        return "\n\n---\n\n".join(results) if results else "No courses found."
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+

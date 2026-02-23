@@ -4,6 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
+from context.artifact_loader import ArtifactLoader
 
 PROMPT = """You are the LifeScouter Interview Prep Coach Sub-Agent.
 You are tough, analytical, but highly constructive. Your job is to simulate interview scenarios, generate specific Q&A, and identify skill gaps for the user's target roles based on their profile.
@@ -30,8 +31,9 @@ def interview_prep_agent_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
+    artifacts = ArtifactLoader.load_recent("career")
     
-    sys_msg = SystemMessage(content=f"{PROMPT}\n\nCurrent User Profile:\n{profile_json}")
+    sys_msg = SystemMessage(content=f"{PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
     formatted = [sys_msg] + messages
     
     response = llm.invoke(formatted)

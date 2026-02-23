@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 import markdown
-from weasyprint import HTML, CSS
 import docx
 from langchain_core.tools import tool
 from typing import Optional
@@ -13,7 +12,8 @@ class DocumentGenerator:
         Converts Markdown into a styled PDF using Weasyprint.
         """
         try:
-            # Convert markdown to basic HTML
+            # Lazy import to avoid crash on systems without GTK/libgobject
+            from weasyprint import HTML
             html_content = markdown.markdown(content_md, extensions=['tables', 'fenced_code'])
             
             # Wraps html inside simple body structure

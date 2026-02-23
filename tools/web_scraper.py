@@ -1,27 +1,37 @@
 import requests
 from bs4 import BeautifulSoup
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import hashlib
 import json
+import time
 from pathlib import Path
 from config.settings import settings
 from langchain_core.tools import tool
 
+
 class WebScraper:
-    def __init__(self, cache_dir: Optional[str] = None):
-        self.timeout = 10
+    # Cache entries older than this are considered stale
+    DEFAULT_CACHE_MAX_AGE_HOURS = 24
+
+    def __init__(self, cache_dir: Optional[str] = None, cache_max_age_hours: int = DEFAULT_CACHE_MAX_AGE_HOURS):
+        self.timeout = 15
+        self.cache_max_age_hours = cache_max_age_hours
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
         }
-        
+
         if cache_dir is None:
             self.cache_dir = Path(settings.data_dir) / "cache" / "scraper"
         else:
             self.cache_dir = Path(cache_dir)
-            
+
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_cache_path(self, url: str) -> Path:
@@ -30,13 +40,20 @@ class WebScraper:
 
     def _check_cache(self, url: str) -> Optional[Dict[str, Any]]:
         cache_path = self._get_cache_path(url)
-        if cache_path.exists():
-            try:
-                with open(cache_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return None
+        if not cache_path.exists():
+            return None
+
+        # Check TTL
+        file_age_hours = (time.time() - cache_path.stat().st_mtime) / 3600
+        if file_age_hours > self.cache_max_age_hours:
+            cache_path.unlink(missing_ok=True)
+            return None
+
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
 
     def _save_cache(self, url: str, data: Dict[str, Any]):
         cache_path = self._get_cache_path(url)
@@ -46,7 +63,6 @@ class WebScraper:
         except Exception as e:
             print(f"Failed to write cache for {url}: {e}")
 
-    # Retry on RequestException (Network/DNS) or standard HTTP errors (500s, rate limits) but NOT on 404s
     @retry(
         retry=retry_if_exception_type(requests.exceptions.RequestException),
         stop=stop_after_attempt(3),
@@ -55,83 +71,141 @@ class WebScraper:
     )
     def _make_request(self, url: str) -> requests.Response:
         response = requests.get(url, headers=self.headers, timeout=self.timeout)
-        # We explicitly don't retry on 404, 401, 403 as backoff won't help
         if response.status_code in [401, 403, 404]:
             return response
-            
-        response.raise_for_status() # This triggers retries for 500s if wrapped in RequestException
+        response.raise_for_status()
         return response
+
+    @staticmethod
+    def _extract_main_content(soup: BeautifulSoup) -> str:
+        """
+        Prioritize meaningful content areas over the full page.
+        Tries <main>, <article>, [role=main] first. Falls back to <body>.
+        """
+        # Try semantic content areas first
+        for selector in ['main', 'article', '[role="main"]', '.content', '#content']:
+            container = soup.select_one(selector)
+            if container and len(container.get_text(strip=True)) > 200:
+                return container.get_text(separator='\n', strip=True)
+
+        # Fallback: full body after removing noise
+        return soup.get_text(separator='\n', strip=True)
+
+    @staticmethod
+    def _extract_structured_data(soup: BeautifulSoup) -> List[Dict]:
+        """Extract JSON-LD structured data (job postings, courses, articles)."""
+        structured = []
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.string)
+                if isinstance(data, list):
+                    structured.extend(data)
+                else:
+                    structured.append(data)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return structured
+
+    @staticmethod
+    def _extract_links(soup: BeautifulSoup, base_url: str, limit: int = 15) -> List[Dict[str, str]]:
+        """Extract the most relevant links from the page."""
+        links = []
+        seen = set()
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            text = a.get_text(strip=True)
+            if not text or len(text) < 3 or href.startswith("#") or href.startswith("javascript:"):
+                continue
+            # Resolve relative URLs
+            if href.startswith("/"):
+                from urllib.parse import urlparse
+                parsed = urlparse(base_url)
+                href = f"{parsed.scheme}://{parsed.netloc}{href}"
+            if href not in seen:
+                seen.add(href)
+                links.append({"text": text[:100], "url": href})
+            if len(links) >= limit:
+                break
+        return links
+
+    @staticmethod
+    def _clean_text(raw_text: str, max_chars: int = 10000) -> str:
+        """Clean and truncate text intelligently."""
+        lines = (line.strip() for line in raw_text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        clean = '\n'.join(chunk for chunk in chunks if chunk)
+        if len(clean) > max_chars:
+            # Truncate at a paragraph boundary if possible
+            cutoff = clean[:max_chars].rfind('\n\n')
+            if cutoff > max_chars * 0.7:
+                clean = clean[:cutoff] + "\n\n[... truncated]"
+            else:
+                clean = clean[:max_chars] + "\n\n[... truncated]"
+        return clean
 
     def scrape(self, url: str, use_cache: bool = True) -> str:
         """
-        Robust scraper implementing caching, extraction and safe degredation.
-        Returns a JSON formatted string denoting success or structural errors.
+        Robust scraper with caching, structured data extraction, and smart truncation.
+        Returns a JSON string with: content, title, links, structured_data.
         """
         if use_cache:
             cached = self._check_cache(url)
             if cached:
-                return json.dumps({"source": "cache", "url": url, "content": cached["content"]})
+                return json.dumps({"source": "cache", "url": url, **cached})
 
         try:
             response = self._make_request(url)
-            
+
             if response.status_code == 403:
-                result = {"error": "Blocked (403 Forbidden). Anti-scraping mechanism detected.", "url": url}
-                return json.dumps(result)
+                return json.dumps({"error": "Blocked (403 Forbidden). The site has anti-scraping protections. Try using tavily_search instead.", "url": url})
             elif response.status_code == 404:
-                result = {"error": "Page not found (404).", "url": url}
-                return json.dumps(result)
+                return json.dumps({"error": "Page not found (404).", "url": url})
             elif response.status_code != 200:
-                result = {"error": f"HTTP Error {response.status_code}.", "url": url}
-                return json.dumps(result)
+                return json.dumps({"error": f"HTTP Error {response.status_code}.", "url": url})
 
-            # Parse
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Remove scripts and styles
-            for script in soup(["script", "style", "nav", "footer", "header"]):
-                script.decompose()
 
-            # Get text
-            text = soup.get_text(separator='\n', strip=True)
-            
-            # Basic cleanup: remove excessive newlines
-            lines = (line.strip() for line in text.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            clean_text = '\n'.join(chunk for chunk in chunks if chunk)
+            # Remove noise elements
+            for tag in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]):
+                tag.decompose()
+
+            # Extract all data types
+            title = soup.title.string.strip() if soup.title and soup.title.string else ""
+            main_text = self._extract_main_content(soup)
+            clean_text = self._clean_text(main_text)
+            structured_data = self._extract_structured_data(soup)
+            links = self._extract_links(soup, url)
 
             data = {
-                "title": soup.title.string if soup.title else "",
-                "content": clean_text[:8000] # LLM token safety constraint
+                "title": title,
+                "content": clean_text,
+                "structured_data": structured_data[:5],  # Limit to 5 entries
+                "links": links,
             }
 
             self._save_cache(url, data)
-            
-            return json.dumps({
-                "source": "live", 
-                "url": url, 
-                "title": data["title"],
-                "content": data["content"]
-            })
+
+            return json.dumps({"source": "live", "url": url, **data})
 
         except requests.exceptions.RequestException as e:
-            # Reached after all tenacity retries fail
             return json.dumps({
-                "error": "Failed to fetch page after multiple retries due to network or timeout issues.",
+                "error": "Failed to fetch page after multiple retries.",
                 "details": str(e),
                 "url": url
             })
 
+
 _scraper_instance = WebScraper()
+
 
 @tool
 def robust_web_scrape(url: str, bypass_cache: bool = False) -> str:
     """
     Scrapes the textual content of a provided URL.
-    Uses an intelligent caching system and retry mechanism with exponential backoff.
-    Removes headers, footers, scripts, and navigation sections to return the core readable content.
-    Returns JSON formatted strings indicating success, cache hits, or specific blocking/network errors.
-    
+    Uses caching (24h TTL), retry with backoff, and smart content extraction.
+    Returns JSON with: title, content (main text), structured_data (JSON-LD), and links.
+    For sites that block scraping (LinkedIn, Indeed), use tavily_search instead.
+
     Args:
         url: The full HTTP/HTTPS URL to scrape.
         bypass_cache: If true, forces a live network request ignoring the local cache.

@@ -4,6 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
+from context.artifact_loader import ArtifactLoader
 
 PROMPT = """You are the LifeScouter Career Lead Generation Sub-Agent.
 Your job is to proactively find high-quality career opportunities and evaluate leads against the user profile.
@@ -30,8 +31,9 @@ def lead_generation_agent_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
+    artifacts = ArtifactLoader.load_recent("career")
     
-    sys_msg = SystemMessage(content=f"{PROMPT}\n\nCurrent User Profile:\n{profile_json}")
+    sys_msg = SystemMessage(content=f"{PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
     formatted = [sys_msg] + messages
     
     response = llm.invoke(formatted)
