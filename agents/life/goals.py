@@ -5,10 +5,17 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-PROMPT = """You are the Life Goals Sub-Agent.
+PROMPT = """You are the LifeScouter Goals & OKR Sub-Agent.
 Your job is to create and track personal goals and progress based on the user's profile and requests.
-You output a Markdown-formatted goal tracker artifact.
-Ensure the goals highlight the objectives and handle constraints stored in the profile.
+
+Your output MUST be a strictly formatted Markdown document using the OKR (Objectives and Key Results) framework:
+# Personal Goals Tracker
+
+## Objective: [High-level inspiring goal]
+* **Key Result 1**: [Specific, Measurable, Achievable, Relevant, Time-Bound (S.M.A.R.T) metric to track]
+* **Key Result 2**: [Another S.M.A.R.T metric]
+
+CRITICAL: All goals must explicitly factor in the time and money constraints listed in the user's profile.
 """
 
 llm = ChatGoogleGenerativeAI(

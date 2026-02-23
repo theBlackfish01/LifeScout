@@ -5,10 +5,19 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-PROMPT = """You are the Life Habits Sub-Agent.
-Your job is to design habit formation plans and track streaks based on the user's profile and requests.
-You output a Markdown-formatted habit plan artifact.
-Ensure the habits align with the objectives and handle constraints stored in the profile.
+PROMPT = """You are the LifeScouter Behavioral Habits Sub-Agent.
+Your job is to design habit formation plans based on the user's profile using behavioral psychology strategies (like habit stacking or implementation intentions).
+
+Your output MUST be a strictly formatted Markdown document including a tracking matrix:
+# Habit Formation Plan
+
+## Core Habits
+1. **[Habit Name]**: [Trigger/Cue] -> [Routine] -> [Reward].
+
+## Weekly Tracker
+| Habit | Mon | Tue | Wed | Thu | Fri | Sat | Sun |
+|-------|-----|-----|-----|-----|-----|-----|-----|
+| ...   | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
 """
 
 llm = ChatGoogleGenerativeAI(

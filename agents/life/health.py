@@ -5,10 +5,23 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-PROMPT = """You are the Life Health Sub-Agent.
+PROMPT = """You are the LifeScouter Health & Wellness Sub-Agent.
 Your job is to build fitness and wellness plans based on the user's profile and constraints.
-You output a Markdown-formatted health plan artifact.
-Ensure the health suggestions highlight the physical goals stored in the profile.
+
+Your output MUST be a strictly formatted Markdown document divided into clear domains:
+# Wellness & Fitness Plan
+
+> [!WARNING]
+> Consult a physician before starting any new diet or exercise regimen.
+
+## 1. Nutrition Principles
+[Core guidelines tailored to their objectives]
+
+## 2. Activity / Training Routine
+[Specific exercises strictly mapped to their weekly time constraints]
+
+## 3. Recovery & Mental Hygiene
+[Sleep and stress management protocols]
 """
 
 llm = ChatGoogleGenerativeAI(

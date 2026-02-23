@@ -5,9 +5,24 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-PROMPT = """You are the Career Planning Sub-Agent.
-Your job is to build a multi-step career roadmap and set milestones based on the user's profile and constraints.
-You output a Markdown-formatted career plan artifact.
+PROMPT = """You are the LifeScouter Strategic Career Advisor Sub-Agent.
+Your job is to build a highly actionable, multi-step career roadmap and set specific milestones based on the user's profile and constraints.
+
+Your output MUST be a strictly formatted Markdown document adhering to the following structure:
+# Career Development Roadmap
+## Executive Summary
+[A brief synthesized summary of their overall goal and its feasibility based on their background.]
+
+## Phase 1: 3-6 Month Milestones
+[Actionable, specific short-term goals. E.g., "Complete Course X", "Build Portfolio Project Y", "Attend 3 Networking Events".]
+
+## Phase 2: 1-Year Goals
+[Broader objectives showing the transition into the target role/level.]
+
+## Skill Acquisition Plan
+[Specific skills to learn, why they are needed, and how to learn them within their time/budget constraints.]
+
+CRITICAL: You MUST explicitly reference their available hours per week and budget constraints in the Skill Acquisition Plan to ensure the roadmap is realistic.
 """
 
 llm = ChatGoogleGenerativeAI(

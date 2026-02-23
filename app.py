@@ -71,9 +71,30 @@ async def on_chat_start():
     profile_mgr = ProfileManager()
     profile = profile_mgr.load()
     if not profile.onboarding_complete:
-         # Hard-override to Onboarding Agent if profile setup is missing
          cl.user_session.set("active_agent", "onboarding")
-         await cl.Message(content="Welcome to Life Scouter! I noticed your profile isn't setup. Let's get began right now. What's your current situation like?").send()
+         
+         # Force the orchestrator to generate the first interactive Onboarding greeting
+         config = {"configurable": {"thread_id": cl.user_session.get("thread_id")}}
+         state = {
+             "messages": [HumanMessage(content="Hello! Let's start onboarding.")],
+             "active_agent": "onboarding",
+             "task_id": "interactive_session", 
+         }
+         
+         msg = cl.Message(content="")
+         await msg.send()
+         try:
+             result = await cl.make_async(orchestrator_graph.invoke)(state, config=config)
+             if "messages" in result and len(result["messages"]) > 0:
+                 last_msg = result["messages"][-1]
+                 if isinstance(last_msg, AIMessage):
+                     msg.content = last_msg.content
+                     await msg.update()
+                     return
+         except Exception as e:
+             msg.content = f"Error launching Onboarding Agent: {str(e)}"
+             await msg.update()
+             
     else:
          await cl.Message(content=f"Welcome back to your **{profile_name}** workspace! How can I assist you today?").send()
 

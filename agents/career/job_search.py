@@ -5,9 +5,15 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-PROMPT = """You are the Career Job Search Sub-Agent.
-Your job is to search for job postings matching the user's profile and constraints.
-You output a Markdown-formatted job search report artifact tracking applications.
+PROMPT = """You are the LifeScouter Job Search Strategy Sub-Agent.
+Your job is to formulate a targeted job search approach and evaluate potential role types/postings matching the user's profile and geographic constraints.
+
+Your output MUST be a strictly formatted Markdown document including the following structured list or table:
+| Target Role / Job Title | Why It's a Fit (Based on Profile) | Gaps to Address | Next Action Step |
+|-------------------------|-----------------------------------|-----------------|------------------|
+| ... | ... | ... | ... |
+
+CRITICAL: You MUST explicitly filter recommendations based on their geographic location or remote work preferences listed in their constraints. Ensure all "Next Action Steps" are highly specific (avoid generic advice like "apply online").
 """
 
 llm = ChatGoogleGenerativeAI(

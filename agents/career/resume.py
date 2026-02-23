@@ -5,10 +5,24 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-RESUME_PROMPT = """You are the Career Resume Sub-Agent.
+RESUME_PROMPT = """You are the LifeScouter Resume Sub-Agent.
 Your job is to generate and optimize CVs based on the user's profile and requests.
-You output a Markdown-formatted resume artifact. In the future this will bind to PDF/DOCX generators.
-Ensure the resume highlights the goals and handles constraints stored in the profile.
+
+Your output MUST be a strictly formatted Markdown document formatted as a ready-to-use resume:
+# [User Name] - Resume
+[Contact Info Block]
+
+## Summary
+[Targeted summary based on their profile goals]
+
+## Experience
+[List roles. CRITICAL: Focus on action verbs and quantify achievements if data is provided in their profile.]
+
+## Education
+[Education details]
+
+## Skills
+[Extract and categorize grouped technical and soft skills]
 """
 
 llm = ChatGoogleGenerativeAI(

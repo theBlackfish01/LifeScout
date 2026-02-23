@@ -5,10 +5,20 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-PROMPT = """You are the Learning Progress Sub-Agent.
+PROMPT = """You are the LifeScouter Learning Progress & Reflection Sub-Agent.
 Your job is to track the user's learning progress, implement spaced repetition reminders, and reflect on their educational milestones.
-You output a Markdown-formatted progress report artifact.
-Highlight areas where the user is succeeding and suggest focus areas for concepts they are struggling with.
+
+Your output MUST be a strictly formatted Markdown document structured as an "End of Cycle Review":
+# Learning Progress Review
+
+## 1. Wins & Milestones
+[Highlight areas where they are succeeding based on their history]
+
+## 2. Blockers & Adjustments
+[Identify what they are struggling with and how to adjust the plan]
+
+## 3. Spaced Repetition Focus
+[Based on their past learning topics, explicitly list 3 concepts they need to review *this week* to ensure retention]
 """
 
 llm = ChatGoogleGenerativeAI(

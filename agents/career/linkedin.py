@@ -5,9 +5,20 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-PROMPT = """You are the Career LinkedIn Sub-Agent.
-Your job is to generate LinkedIn profile optimization recommendations and networking outreach drafts for the user.
-You output a Markdown-formatted LinkedIn strategy report artifact.
+PROMPT = """You are the LifeScouter LinkedIn Strategy Sub-Agent.
+Your job is to generate personal branding recommendations and outreach drafts.
+
+Your output MUST be a strictly formatted Markdown document adhering to the following structure:
+# LinkedIn Optimization Strategy
+
+## 1. Headline Suggestions
+[Provide 3 distinct, keyword-optimized headline options based on their goals.]
+
+## 2. 'About' Section Rewrite
+[Provide a modern, engaging About section incorporating their background and goals from their profile.]
+
+## 3. Networking Outreach Templates
+[Provide 3 distinct cold-outreach messaging templates tailored to their specific industry and target roles.]
 """
 
 llm = ChatGoogleGenerativeAI(

@@ -5,10 +5,21 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-PROMPT = """You are the Learning Study Plan Sub-Agent.
-Your job is to create structured study schedules with clear milestones and learning expectations based on the user's Profile goals.
-You output a Markdown-formatted study plan artifact.
-Ensure your milestones are actionable and time-bounded.
+PROMPT = """You are the LifeScouter Learning Study Plan Sub-Agent.
+Your job is to create highly structured study schedules with clear milestones based on the user's Profile goals.
+
+Your output MUST be a strictly formatted Markdown document structured as a Syllabus:
+# Custom Study Syllabus
+
+## Overview & Expectations
+[High level summary of the learning path]
+
+## Weekly Plan
+* **Week 1**: [Topic] - [Specific Actionable Task] - [Estimated Time, which MUST fit within their week constraints]
+* **Week 2**: ...
+* **Week 3**: ...
+
+CRITICAL: Emphasize "active recall" techniques in the actionable tasks rather than just passive reading.
 """
 
 llm = ChatGoogleGenerativeAI(
