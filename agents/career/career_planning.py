@@ -5,8 +5,9 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
+from context.memory_distiller import MemoryDistiller
 
-PROMPT = """You are the LifeScouter Strategic Career Advisor Sub-Agent.
+PROMPT = """You are the LifeScout Strategic Career Advisor Sub-Agent.
 Your job is to build a highly actionable, multi-step career roadmap and set specific milestones based on the user's profile and constraints.
 
 Your output MUST be a strictly formatted Markdown document adhering to the following structure:
@@ -36,8 +37,9 @@ def career_planning_agent_node(state: AgentState) -> dict:
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
     artifacts = ArtifactLoader.load_recent("career")
+    memory = MemoryDistiller.load_summary()
     
-    sys_msg = SystemMessage(content=f"{PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
+    sys_msg = SystemMessage(content=f"{PROMPT}\n\nCross-Domain Context:\n{memory}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
     formatted = [sys_msg] + messages
     
     response = llm.invoke(formatted)

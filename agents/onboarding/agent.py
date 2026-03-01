@@ -8,7 +8,7 @@ from context.profile_manager import ProfileManager
 from models.user_profile import UserProfile
 
 # Define the conversational system prompt indicating the Onboarding objective
-ONBOARDING_SYSTEM_PROMPT = """You are the LifeScouter AI Onboarding Manager.
+ONBOARDING_SYSTEM_PROMPT = """You are the LifeScout AI Onboarding Manager.
 Your goal is to collect information from the user to build a comprehensive UserProfile. You are an empathetic, insightful coach conducting an intake session.
 
 You need to iteratively ask questions to fill out the following schema:

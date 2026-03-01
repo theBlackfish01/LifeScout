@@ -14,7 +14,7 @@ export default function OnboardingModal() {
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-white/10 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                        <span>👋</span> Welcome to LifeScouter
+                        <span>👋</span> Welcome to LifeScout
                     </h2>
                     <p className="text-sm text-gray-400 mt-1">
                         Let&apos;s set up your profile to personalize your experience.

@@ -6,10 +6,11 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
+from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search, search_courses
 from tools.web_scraper import robust_web_scrape
 
-PROMPT = """You are the LifeScouter Learning Course Recommendation Sub-Agent.
+PROMPT = """You are the LifeScout Learning Course Recommendation Sub-Agent.
 Your job is to recommend REAL online courses, textbooks, and tutorials based on the user's learning goals.
 
 You have access to tools:
@@ -50,8 +51,9 @@ def course_rec_agent_node(state: AgentState) -> dict:
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
     artifacts = ArtifactLoader.load_recent("learning")
+    memory = MemoryDistiller.load_summary()
     
-    sys_content = f"{PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}"
+    sys_content = f"{PROMPT}\n\nCross-Domain Context:\n{memory}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}"
     input_msgs = [SystemMessage(content=sys_content)] + messages
     
     try:

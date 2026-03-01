@@ -6,9 +6,10 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
+from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search
 
-PROMPT = """You are the LifeScouter LinkedIn Strategy Sub-Agent.
+PROMPT = """You are the LifeScout LinkedIn Strategy Sub-Agent.
 Your job is to generate personal branding recommendations and outreach drafts optimized for LinkedIn.
 
 You have access to tools:
@@ -49,8 +50,9 @@ def linkedin_agent_node(state: AgentState) -> dict:
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
     artifacts = ArtifactLoader.load_recent("career")
+    memory = MemoryDistiller.load_summary()
     
-    sys_content = f"{PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}"
+    sys_content = f"{PROMPT}\n\nCross-Domain Context:\n{memory}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}"
     input_msgs = [SystemMessage(content=sys_content)] + messages
     
     try:

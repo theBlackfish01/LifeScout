@@ -5,8 +5,9 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
+from context.memory_distiller import MemoryDistiller
 
-PROMPT = """You are the LifeScouter Health & Wellness Sub-Agent.
+PROMPT = """You are the LifeScout Health & Wellness Sub-Agent.
 Your job is to build fitness and wellness plans based on the user's profile and constraints.
 
 Your output MUST be a strictly formatted Markdown document divided into clear domains:
@@ -35,8 +36,9 @@ def health_agent_node(state: AgentState) -> dict:
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
     artifacts = ArtifactLoader.load_recent("life")
+    memory = MemoryDistiller.load_summary()
     
-    sys_msg = SystemMessage(content=f"{PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
+    sys_msg = SystemMessage(content=f"{PROMPT}\n\nCross-Domain Context:\n{memory}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
     formatted = [sys_msg] + messages
     
     response = llm.invoke(formatted)

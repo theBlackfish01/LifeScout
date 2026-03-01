@@ -6,9 +6,10 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
+from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search
 
-RESUME_PROMPT = """You are the LifeScouter Resume Sub-Agent.
+RESUME_PROMPT = """You are the LifeScout Resume Sub-Agent.
 Your job is to generate and optimize CVs based on the user's profile and requests.
 
 You have access to tools:
@@ -50,8 +51,9 @@ def resume_agent_node(state: AgentState) -> dict:
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
     artifacts = ArtifactLoader.load_recent("career")
+    memory = MemoryDistiller.load_summary()
     
-    sys_content = f"{RESUME_PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}"
+    sys_content = f"{RESUME_PROMPT}\n\nCross-Domain Context:\n{memory}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}"
     input_msgs = [SystemMessage(content=sys_content)] + messages
     
     try:

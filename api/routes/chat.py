@@ -78,6 +78,18 @@ async def websocket_chat(websocket: WebSocket, thread_id: str):
                                 "agent_name": getattr(msg, "name", None) or "assistant",
                             })
 
+                # Trigger asynchronous memory distillation
+                try:
+                    from context.memory_distiller import MemoryDistiller
+                    ai_msgs = [m for m in result.get("messages", []) if isinstance(m, AIMessage)]
+                    if ai_msgs:
+                        await loop.run_in_executor(
+                            None,
+                            lambda: MemoryDistiller.distill(result["messages"], active_agent)
+                        )
+                except Exception as de:
+                    print(f"[Chat WS] Memory distillation error (non-fatal): {de}")
+
                 # 6. If no AI message was produced, send a helpful fallback
                 if not ai_found:
                     await websocket.send_json({

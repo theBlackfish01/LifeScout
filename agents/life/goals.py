@@ -5,8 +5,9 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
+from context.memory_distiller import MemoryDistiller
 
-PROMPT = """You are the LifeScouter Goals & OKR Sub-Agent.
+PROMPT = """You are the LifeScout Goals & OKR Sub-Agent.
 Your job is to create and track personal goals and progress based on the user's profile and requests.
 
 Your output MUST be a strictly formatted Markdown document using the OKR (Objectives and Key Results) framework:
@@ -29,8 +30,9 @@ def goals_agent_node(state: AgentState) -> dict:
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
     artifacts = ArtifactLoader.load_recent("life")
+    memory = MemoryDistiller.load_summary()
     
-    sys_msg = SystemMessage(content=f"{PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
+    sys_msg = SystemMessage(content=f"{PROMPT}\n\nCross-Domain Context:\n{memory}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
     formatted = [sys_msg] + messages
     
     response = llm.invoke(formatted)

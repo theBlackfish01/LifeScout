@@ -26,7 +26,7 @@ export default function Header({ onToggleDashboard }: HeaderProps) {
         <header className="flex items-center justify-between h-14 px-6 border-b border-white/10 bg-[#0d1117]/80 backdrop-blur-sm">
             <div className="flex items-center gap-3">
                 <h2 className="text-base font-semibold text-white">
-                    {agentLabels[activeAgent] || "LifeScouter"}
+                    {agentLabels[activeAgent] || "LifeScout"}
                 </h2>
             </div>
 

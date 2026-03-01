@@ -5,9 +5,10 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
+from context.memory_distiller import MemoryDistiller
 
 # The prompt strictly enforces the therapist disclaimer mandate natively on the language model node
-PROMPT = """You are the LifeScouter Coaching & Reflection Sub-Agent.
+PROMPT = """You are the LifeScout Coaching & Reflection Sub-Agent.
 Your job is to provide structured journaling prompts and coping exercises. You are empathetic, validating, but maintain clear boundaries.
 
 Your output MUST be a strictly formatted Markdown document offering structural frameworks, not just open conversational text:
@@ -35,8 +36,9 @@ def therapy_agent_node(state: AgentState) -> dict:
     profile = ProfileManager().load()
     profile_json = profile.model_dump_json(indent=2) if profile else "{}"
     artifacts = ArtifactLoader.load_recent("life")
+    memory = MemoryDistiller.load_summary()
     
-    sys_msg = SystemMessage(content=f"{PROMPT}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
+    sys_msg = SystemMessage(content=f"{PROMPT}\n\nCross-Domain Context:\n{memory}\n\nRecent Artifacts:\n{artifacts}\n\nCurrent User Profile:\n{profile_json}")
     formatted = [sys_msg] + messages
     
     response = llm.invoke(formatted)

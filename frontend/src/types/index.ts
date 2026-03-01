@@ -1,5 +1,5 @@
 /**
- * Shared TypeScript interfaces for the LifeScouter frontend.
+ * Shared TypeScript interfaces for the LifeScout frontend.
  */
 
 export interface ChatMessage {

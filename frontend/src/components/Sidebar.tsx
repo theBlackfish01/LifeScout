@@ -26,7 +26,7 @@ export default function Sidebar() {
             <div className="flex items-center gap-2 px-2 mb-4">
                 <span className="text-2xl">🔭</span>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                    LifeScouter
+                    LifeScout
                 </h1>
             </div>
 
@@ -65,7 +65,7 @@ export default function Sidebar() {
 
             <div className="mt-auto">
                 <Separator className="bg-white/10 mb-3" />
-                <p className="text-[10px] text-gray-600 text-center">LifeScouter AI v1.0</p>
+                <p className="text-[10px] text-gray-600 text-center">LifeScout AI v1.0</p>
             </div>
         </aside>
     );

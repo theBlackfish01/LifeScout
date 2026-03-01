@@ -5,6 +5,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from config.settings import settings
 from orchestrator.state import AgentState
 from context.task_manager import task_manager
+from context.memory_distiller import MemoryDistiller
 
 PROMPT = """You are the Learning Supervisor Agent.
 Your job is to route user requests regarding education, courses, study planning, or progress tracking to the correct specialized sub-agent.
@@ -54,7 +55,8 @@ def learning_supervisor_node(state: AgentState) -> dict:
                 "next": "__end__"
             }
             
-    sys_msg = SystemMessage(content=PROMPT)
+    memory = MemoryDistiller.load_summary()
+    sys_msg = SystemMessage(content=f"{PROMPT}\n\nCross-Domain Context:\n{memory}")
     formatted = [sys_msg] + messages
     
     response = llm.invoke(formatted)

@@ -8,6 +8,7 @@ from orchestrator.state import AgentState
 from orchestrator.supervisor import enforce_budget
 from config.settings import settings
 from context.task_manager import task_manager
+from context.memory_distiller import MemoryDistiller
 
 class Route(BaseModel):
     next: Literal[
@@ -81,7 +82,8 @@ def career_supervisor_node(state: AgentState) -> dict:
             }
 
     messages = state.get("messages", [])
-    sys_msg = SystemMessage(content=SUPERVISOR_PROMPT)
+    memory = MemoryDistiller.load_summary()
+    sys_msg = SystemMessage(content=f"{SUPERVISOR_PROMPT}\n\nCross-Domain Context:\n{memory}")
     formatted_messages = [sys_msg] + messages
     
     try:

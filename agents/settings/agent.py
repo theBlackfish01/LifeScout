@@ -7,7 +7,7 @@ from config.settings import settings
 from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 
-SETTINGS_SYSTEM_PROMPT = """You are the LifeScouter AI Settings Manager.
+SETTINGS_SYSTEM_PROMPT = """You are the LifeScout AI Settings Manager.
 You are interacting with the user to manage their `UserProfile`.
 
 Here is their current profile stored in the system:

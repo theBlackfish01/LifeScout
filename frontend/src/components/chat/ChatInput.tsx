@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
+import { Paperclip, Loader2 } from "lucide-react";
 
 interface ChatInputProps {
     agentOverride?: string;
@@ -11,6 +12,7 @@ interface ChatInputProps {
 
 export default function ChatInput({ agentOverride }: ChatInputProps) {
     const [text, setText] = useState("");
+    const [isUploading, setIsUploading] = useState(false);
     const isProcessing = useAppStore((s) => s.isProcessing);
 
     const handleSubmit = (e: FormEvent) => {
@@ -49,11 +51,67 @@ export default function ChatInput({ agentOverride }: ChatInputProps) {
         setText("");
     };
 
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await fetch("http://localhost:8000/api/upload/resume", {
+                method: "POST",
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                 const store = useAppStore.getState();
+                 store.addMessage({
+                    id: crypto.randomUUID(),
+                    role: "system",
+                    content: `[SYSTEM] Successfully uploaded resume: ${data.filename}. The career agent can now access this via the parsing tool.`,
+                    timestamp: Date.now(),
+                 });
+            } else {
+                 console.error("Upload failed:", data.detail); alert("Upload failed: " + data.detail);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Upload error.");
+        } finally {
+            setIsUploading(false);
+            e.target.value = ""; // reset input
+        }
+    };
+
     return (
         <form
             onSubmit={handleSubmit}
             className="flex items-center gap-2 p-4 border-t border-white/10 bg-[#0d1117]/60 backdrop-blur-sm"
         >
+            <div className="relative">
+                <input
+                    type="file"
+                    id="resume-upload"
+                    accept=".pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                    disabled={isUploading || isProcessing}
+                />
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-gray-400 hover:text-white"
+                    asChild
+                >
+                    <label htmlFor="resume-upload" className="cursor-pointer">
+                        {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
+                    </label>
+                </Button>
+            </div>
             <Input
                 value={text}
                 onChange={(e) => setText(e.target.value)}

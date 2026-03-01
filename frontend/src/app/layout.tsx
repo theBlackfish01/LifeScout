@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "LifeScouter — AI Personal Assistant",
+  title: "LifeScout — AI Personal Assistant",
   description: "Your AI-powered career, life, and learning companion.",
 };
 
