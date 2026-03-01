@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AgentType, ChatMessage, UserProfile, Task, Artifact } from "@/types";
+import type { AgentType, ChatMessage, UserProfile, Task, Artifact, Notification } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
@@ -34,6 +34,12 @@ interface AppState {
     connectWs: (threadId: string) => void;
     disconnectWs: () => void;
     sendMessage: (text: string) => void;
+
+    // --- Notifications ---
+    notifications: Notification[];
+    unreadCount: number;
+    fetchNotifications: () => Promise<void>;
+    markNotificationRead: (id: string) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -194,6 +200,30 @@ export const useAppStore = create<AppState>((set, get) => ({
             }, 500);
         } else {
             ws.send(JSON.stringify({ message: text, active_agent: activeAgent }));
+        }
+    },
+
+    // --- Notifications ---
+    notifications: [],
+    unreadCount: 0,
+    fetchNotifications: async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/notifications`);
+            if (res.ok) {
+                const notifications: Notification[] = await res.json();
+                const unreadCount = notifications.filter((n) => !n.read).length;
+                set({ notifications, unreadCount });
+            }
+        } catch (err) {
+            console.error("Failed to fetch notifications:", err);
+        }
+    },
+    markNotificationRead: async (id) => {
+        try {
+            await fetch(`${API_BASE}/api/notifications/${id}/read`, { method: "PUT" });
+            get().fetchNotifications();
+        } catch (err) {
+            console.error("Failed to mark notification read:", err);
         }
     },
 }));

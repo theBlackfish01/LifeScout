@@ -16,10 +16,16 @@ Available Sub-Agents:
 3. 'progress_agent': For tracking learning progress, logging completed milestones, or spaced repetition schedules.
 
 You MUST choose one of these sub-agents if the request fits. If the request does not fit any of these, or if the user is explicitly ending the conversation, output '__end__'.
+
+If the user is just saying hello, asking a clarifying question, or if their request cannot be helped by any agent, route to "__end__" BUT provide a helpful, friendly message in the conversational_response field.
 """
 
 class Route(BaseModel):
     next: str = Field(description="The name of the next agent to route to, or '__end__' to terminate.")
+    conversational_response: str | None = Field(
+        default=None,
+        description="If the user is just saying hello, asking a clarifying question, or if their request cannot be helped by any agent, route to '__end__' BUT provide a helpful, friendly message in this field."
+    )
 
 llm = ChatGoogleGenerativeAI(
     model=settings.model_low_complexity,
@@ -59,9 +65,25 @@ def learning_supervisor_node(state: AgentState) -> dict:
     sys_msg = SystemMessage(content=f"{PROMPT}\n\nCross-Domain Context:\n{memory}")
     formatted = [sys_msg] + messages
     
-    response = llm.invoke(formatted)
+    try:
+        response = llm.invoke(formatted)
+        next_node = response.next if response else "__end__"
+        direct_reply = response.conversational_response if response and hasattr(response, "conversational_response") else None
+    except Exception as e:
+        print(f"[Learning Supervisor] Structured output error: {e}")
+        next_node = "__end__"
+        direct_reply = None
+        
+    print(f"[Learning Supervisor] Routing to: {next_node}")
+
+    msgs = []
+    if direct_reply:
+        msgs.append(AIMessage(content=direct_reply, name="learning_supervisor"))
     
-    return {
+    ret = {
         "budget_stats": stats,
-        "next": response.next
+        "next": next_node
     }
+    if msgs:
+        ret["messages"] = msgs
+    return ret

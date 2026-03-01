@@ -76,3 +76,13 @@ export interface Artifact {
 }
 
 export type AgentType = "career" | "life" | "learning" | "settings";
+
+export interface Notification {
+    id: string;
+    title: string;
+    message: string;
+    type: "info" | "success" | "warning" | "career" | "life";
+    link?: string;
+    read: boolean;
+    timestamp: number;
+}

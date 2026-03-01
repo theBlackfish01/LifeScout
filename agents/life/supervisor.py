@@ -16,8 +16,11 @@ class Route(BaseModel):
         "habits_agent",
         "health_agent",
         "therapy_agent",
-        "__end__"
     ] = Field(description="The next specialized agent to route to, or __end__ if the request is completed or not related to life.")
+    conversational_response: str | None = Field(
+        default=None,
+        description="If the user is just saying hello, asking a clarifying question, or if their request cannot be helped by any agent, route to '__end__' BUT provide a helpful, friendly message in this field."
+    )
 
 SUPERVISOR_PROMPT = """You are the Life Supervisor Agent.
 Your job is to manage the user's personal development requests by delegating tasks to specialized sub-agents.
@@ -30,6 +33,8 @@ You have access to the following sub-agents:
 Analyze the conversation history. If the user's request is best handled by one of these agents, route to it.
 If the sub-agent has already executed and returned a helpful response completing the user's intent, route to "__end__".
 If the request is unrelated to life/health/goals/habits, route to "__end__".
+
+If the user is just saying hello, asking a clarifying question, or if their request cannot be helped by any agent, route to "__end__" BUT provide a helpful, friendly message in the conversational_response field.
 """
 
 # Initialize LLM
@@ -87,12 +92,18 @@ def life_supervisor_node(state: AgentState) -> dict:
     try:
         response = llm_with_tools.invoke(formatted_messages)
         next_node = response.next if response else "__end__"
+        direct_reply = response.conversational_response if response and hasattr(response, "conversational_response") else None
     except Exception as e:
         print(f"[Life Supervisor] Structured output error: {e}")
         # fallback if gemini fails formatting
         next_node = "__end__"
+        direct_reply = None
     
     print(f"[Life Supervisor] Routing to: {next_node}")
+    
+    msgs = []
+    if direct_reply:
+        msgs.append(AIMessage(content=direct_reply, name="life_supervisor"))
     
     if next_node == "__end__" and task_id:
         t = task_manager.get_task(task_id)
@@ -102,4 +113,7 @@ def life_supervisor_node(state: AgentState) -> dict:
             
     stats["iterations"] += 1
     
-    return {"budget_stats": stats, "next": next_node}
+    ret = {"budget_stats": stats, "next": next_node}
+    if msgs:
+        ret["messages"] = msgs
+    return ret

@@ -7,7 +7,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import profile, tasks, artifacts, chat, uploads
+from api.routes import profile, tasks, artifacts, chat, uploads, notifications
+from services.scheduler import scheduler_service
 
 
 # --- Lifespan ---
@@ -25,7 +26,9 @@ async def lifespan(app: FastAPI):
     Path(settings.checkpoints_dir).mkdir(parents=True, exist_ok=True)
 
     print("[LifeScout API] Data directories initialized.")
+    scheduler_service.start()
     yield
+    scheduler_service.shutdown()
     print("[LifeScout API] Server shutting down.")
 
 
@@ -53,6 +56,7 @@ app.include_router(tasks.router)
 app.include_router(artifacts.router)
 app.include_router(chat.router)
 app.include_router(uploads.router)
+app.include_router(notifications.router)
 
 
 # --- Health Check ---
