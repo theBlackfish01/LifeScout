@@ -1,6 +1,5 @@
 langgraph
 langchain
-chainlit
 google-generativeai
 langchain-google-genai
 tavily-python

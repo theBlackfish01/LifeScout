@@ -4,7 +4,7 @@ from context.task_manager import task_manager
 
 async def scheduler_loop():
     """
-    A lightweight background loop running within the `app.py` Chainlit session lifecycle.
+    A lightweight background loop running within the FastAPI session lifecycle.
     Periodically checks if any 'scheduled' triggers need to be fired and enqueues them 
     in the `task_manager` which will then be picked up by the graph runners.
     """

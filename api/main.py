@@ -1,6 +1,5 @@
 """
 FastAPI Main Application Server.
-Replaces the Chainlit app.py as the primary server entrypoint.
 Run with: uvicorn api.main:app --reload --port 8000
 """
 from contextlib import asynccontextmanager
