@@ -5,6 +5,9 @@ from typing import Dict, Any, Optional, List
 import hashlib
 import json
 import time
+import socket
+import ipaddress
+from urllib.parse import urlparse
 from pathlib import Path
 from config.settings import settings
 from langchain_core.tools import tool
@@ -33,6 +36,26 @@ class WebScraper:
             self.cache_dir = Path(cache_dir)
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def _is_safe_url(self, url: str) -> bool:
+        """Validate URL to prevent Server-Side Request Forgery (SSRF)."""
+        if not url.lower().startswith(('http://', 'https://')):
+            return False
+            
+        try:
+            parsed = urlparse(url)
+            hostname = parsed.hostname
+            if not hostname:
+                return False
+                
+            ip_str = socket.gethostbyname(hostname)
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                return False
+                
+            return True
+        except Exception:
+            return False
 
     def _get_cache_path(self, url: str) -> Path:
         url_hash = hashlib.md5(url.encode('utf-8')).hexdigest()
@@ -70,7 +93,30 @@ class WebScraper:
         reraise=True
     )
     def _make_request(self, url: str) -> requests.Response:
-        response = requests.get(url, headers=self.headers, timeout=self.timeout)
+        if not self._is_safe_url(url):
+            raise requests.exceptions.RequestException(f"Unsafe URL rejected (SSRF prevention): {url}")
+            
+        # Prevent DoS by capping download size and using a dedicated session.
+        session = requests.Session()
+        session.max_redirects = 3
+        response = session.get(url, headers=self.headers, timeout=self.timeout, stream=True)
+        
+        # Check Content-Length before downloading if available
+        cl = response.headers.get('Content-Length')
+        if cl and int(cl) > 10 * 1024 * 1024:  # 10MB limit
+            response.close()
+            raise requests.exceptions.RequestException("Response payload too large")
+            
+        content = b""
+        for chunk in response.iter_content(chunk_size=8192):
+            content += chunk
+            if len(content) > 10 * 1024 * 1024:
+                response.close()
+                raise requests.exceptions.RequestException("Response payload too large")
+                
+        # Monkey patch the internal content property so .text works as expected
+        response._content = content
+        
         if response.status_code in [401, 403, 404]:
             return response
         response.raise_for_status()
@@ -114,7 +160,8 @@ class WebScraper:
         for a in soup.find_all("a", href=True):
             href = a["href"]
             text = a.get_text(strip=True)
-            if not text or len(text) < 3 or href.startswith("#") or href.startswith("javascript:"):
+            href_lower = href.strip().lower()
+            if not text or len(text) < 3 or href_lower.startswith("#") or href_lower.startswith("javascript:") or href_lower.startswith("data:"):
                 continue
             # Resolve relative URLs
             if href.startswith("/"):
