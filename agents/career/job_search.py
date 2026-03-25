@@ -1,4 +1,3 @@
-from pathlib import Path
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -10,6 +9,7 @@ from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search, search_jobs
 from tools.web_scraper import robust_web_scrape
 from tools.document_parser import parse_document
+from tools.save_artifact import save_artifact
 
 PROMPT = """You are the LifeScout Job Search Strategy Sub-Agent.
 Your job is to formulate a targeted job search approach and find REAL job postings matching the user's profile.
@@ -66,13 +66,10 @@ def job_search_agent_node(state: AgentState) -> dict:
         print(f"[Job Search Agent] ReAct execution error: {e}")
         final_content = f"Job search encountered an error: {str(e)}"
     
-    # Save artifact
-    artifact_dir = Path(settings.data_dir) / "career" / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     task_id = state.get("task_id", "manual")
-    file_path = artifact_dir / f"job_search_{task_id}.md"
-    
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(final_content)
-        
-    return {"messages": [AIMessage(content=final_content, name="job_search_agent")]}
+    save_artifact("career", "job_search", task_id, final_content)
+
+    return {
+        "messages": [AIMessage(content=final_content, name="job_search_agent")],
+        "termination_signal": True
+    }

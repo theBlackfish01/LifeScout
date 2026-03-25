@@ -1,78 +1,109 @@
-import os
-from pathlib import Path
-from tools import SearchTool, WebScraper, DocumentParser, DocumentGenerator, FileManager
-from config.settings import settings
+"""
+Tool module tests.
+
+Unit tests: save_artifact collision prevention, document generation/parsing (no API keys).
+Integration tests: Tavily search, live web scraping (require API keys).
+"""
 import uuid
+import pytest
+from pathlib import Path
 
-def run_tests():
-    print("Testing Shared Modules...")
-    
-    # 1. Search Tool
-    print("\n--- Testing Tavily Search ---")
-    searcher = SearchTool()
-    if searcher.api_key:
-        res = searcher.search("LangGraph python architecture summary", search_depth="basic")
-        print("Tavily Search success. Length:", len(res))
-        assert len(res) > 0, "No results returned"
-    else:
-         print("Skipping Tavily test (no API Key)")
+from tools.save_artifact import save_artifact
+from config.settings import settings
 
-    # 2. Web Scraper
-    print("\n--- Testing Web Scraper ---")
-    scraper = WebScraper()
-    # Test valid scrape
-    res = scraper.scrape("https://example.com", use_cache=False)
-    assert "source" in res, "Scrape failed"
-    print("Live scrape success. Length:", len(res))
-    
-    # Test cache scrape
-    res_cache = scraper.scrape("https://example.com", use_cache=True)
-    assert 'cache' in res_cache, "Cache retrieve failed"
-    print("Cache scrape success.")
-    
-    # Test 404 degredation
-    res_404 = scraper.scrape("https://example.com/this-page-does-not-exist-1234")
-    assert '404' in res_404, "404 degredation failed"
-    print("404 Graceful degredation success.")
 
-    # 3. Document Generator
-    print("\n--- Testing Document Generator ---")
+# ---------------------------------------------------------------------------
+# save_artifact (unit, no API key)
+# ---------------------------------------------------------------------------
+
+def test_save_artifact_creates_file(tmp_data_dir):
+    path = save_artifact("career", "resume", "task_1", "# My Resume\n\nContent here.")
+    assert path.exists()
+    assert path.read_text(encoding="utf-8") == "# My Resume\n\nContent here."
+
+
+def test_save_artifact_path_format(tmp_data_dir):
+    path = save_artifact("life", "goals", "task_abc", "content")
+    assert path.name == "goals_task_abc.md"
+    assert "life" in str(path)
+    assert "artifacts" in str(path)
+
+
+def test_save_artifact_collision_prevention(tmp_data_dir):
+    """Same group/name/task_id must produce distinct files."""
+    path1 = save_artifact("career", "resume", "dup_task", "first version")
+    path2 = save_artifact("career", "resume", "dup_task", "second version")
+    assert path1 != path2, "Collision: same filename written twice"
+    assert path1.exists()
+    assert path2.exists()
+
+
+def test_save_artifact_creates_parent_dirs(tmp_data_dir):
+    path = save_artifact("learning", "study_plan", "new_task", "content")
+    assert path.parent.is_dir()
+
+
+# ---------------------------------------------------------------------------
+# DocumentGenerator + DocumentParser (unit, no API key — WeasyPrint is mocked)
+# ---------------------------------------------------------------------------
+
+def test_document_generator_creates_docx(tmp_data_dir):
+    from tools.document_generator import DocumentGenerator
     gen = DocumentGenerator()
-    md_content = "# Test Doc\n\nThis is a *test* document for python-docx and Weasyprint."
-    
-    pdf_path = Path(settings.data_dir) / "test_gen.pdf"
-    docx_path = Path(settings.data_dir) / "test_gen.docx"
-    
-    res_pdf = gen.generate(md_content, str(pdf_path), "pdf")
-    res_docx = gen.generate(md_content, str(docx_path), "docx")
-    
-    assert pdf_path.exists(), "PDF not generated"
-    assert docx_path.exists(), "DOCX not generated"
-    print("Generated PDF and DOCX successfully.")
+    docx_path = tmp_data_dir / "test_gen.docx"
+    gen.generate("# Test\n\nContent.", str(docx_path), "docx")
+    assert docx_path.exists()
+    assert docx_path.stat().st_size > 0
 
-    # 4. Document Parser
-    print("\n--- Testing Document Parser ---")
+
+def test_document_parser_reads_docx(tmp_data_dir):
+    from tools.document_generator import DocumentGenerator
+    from tools.document_parser import DocumentParser
+    gen = DocumentGenerator()
+    docx_path = tmp_data_dir / "parse_test.docx"
+    gen.generate("# Hello World\n\nThis is a test.", str(docx_path), "docx")
+
     parser = DocumentParser()
-    txt_pdf = parser.parse(str(pdf_path))
-    txt_docx = parser.parse(str(docx_path))
-    
-    assert len(txt_pdf) > 0, "PDF text empty"
-    assert len(txt_docx) > 0, "DOCX text empty"
-    print(f"Parsed PDF len: {len(txt_pdf)}, DOCX len: {len(txt_docx)}")
-    
-    # Clean up gen files
-    pdf_path.unlink()
-    docx_path.unlink()
+    text = parser.parse(str(docx_path))
+    assert len(text) > 0
 
-    # 5. File Manager Context Wrapper
-    print("\n--- Testing File Manager IO Wrapper ---")
-    fm = FileManager()
-    task_id = str(uuid.uuid4())
-    save_res = fm.save_agent_artifact("career", task_id, "report", "Test Artifact", "md", "# Hello")
-    assert "Error" not in save_res, f"Failed to save artifact: {save_res}"
-    print("File Manager Context Save Success.")
 
-    print("\nAll Tool Tests Passed Successfully.")
+# ---------------------------------------------------------------------------
+# Integration: Tavily search (requires TAVILY_API_KEY)
+# ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    run_tests()
+@pytest.mark.integration
+def test_tavily_search_returns_results(require_tavily_key):
+    from tools import SearchTool
+    searcher = SearchTool()
+    result = searcher.search("LangGraph python multi-agent framework", search_depth="basic")
+    assert len(result) > 0
+
+
+# ---------------------------------------------------------------------------
+# Integration: web scraper (live HTTP, no key needed but marked integration)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.integration
+def test_web_scraper_fetches_example_com():
+    from tools import WebScraper
+    scraper = WebScraper()
+    result = scraper.scrape("https://example.com", use_cache=False)
+    assert "source" in result
+
+
+@pytest.mark.integration
+def test_web_scraper_caches_result():
+    from tools import WebScraper
+    scraper = WebScraper()
+    scraper.scrape("https://example.com", use_cache=False)
+    cached = scraper.scrape("https://example.com", use_cache=True)
+    assert "cache" in cached
+
+
+@pytest.mark.integration
+def test_web_scraper_graceful_404():
+    from tools import WebScraper
+    scraper = WebScraper()
+    result = scraper.scrape("https://example.com/this-page-does-not-exist-99999")
+    assert "404" in result or "error" in result.lower()

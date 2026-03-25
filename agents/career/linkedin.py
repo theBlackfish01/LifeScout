@@ -1,4 +1,3 @@
-from pathlib import Path
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -8,6 +7,7 @@ from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
 from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search
+from tools.save_artifact import save_artifact
 
 PROMPT = """You are the LifeScout LinkedIn Strategy Sub-Agent.
 Your job is to generate personal branding recommendations and outreach drafts optimized for LinkedIn.
@@ -63,12 +63,10 @@ def linkedin_agent_node(state: AgentState) -> dict:
         print(f"[LinkedIn Agent] ReAct execution error: {e}")
         final_content = f"LinkedIn optimization encountered an error: {str(e)}"
     
-    artifact_dir = Path(settings.data_dir) / "career" / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     task_id = state.get("task_id", "manual")
-    file_path = artifact_dir / f"linkedin_{task_id}.md"
-    
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(final_content)
-        
-    return {"messages": [AIMessage(content=f"Generated LinkedIn optimization report and saved artifact to {file_path}", name="linkedin_agent")]}
+    file_path = save_artifact("career", "linkedin", task_id, final_content)
+
+    return {
+        "messages": [AIMessage(content=f"LinkedIn optimization report saved to {file_path}", name="linkedin_agent")],
+        "termination_signal": True
+    }

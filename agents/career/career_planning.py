@@ -1,4 +1,3 @@
-from pathlib import Path
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from config.settings import settings
@@ -6,6 +5,7 @@ from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
 from context.memory_distiller import MemoryDistiller
+from tools.save_artifact import save_artifact
 
 PROMPT = """You are the LifeScout Strategic Career Advisor Sub-Agent.
 Your job is to build a highly actionable, multi-step career roadmap and set specific milestones based on the user's profile and constraints.
@@ -44,12 +44,10 @@ def career_planning_agent_node(state: AgentState) -> dict:
     
     response = llm.invoke(formatted)
     
-    artifact_dir = Path(settings.data_dir) / "career" / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     task_id = state.get("task_id", "manual")
-    file_path = artifact_dir / f"career_planning_{task_id}.md"
-    
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(response.content)
-        
-    return {"messages": [AIMessage(content=f"Generated Career Planning roadmap and saved artifact to {file_path}", name="career_planning_agent")]}
+    file_path = save_artifact("career", "career_planning", task_id, response.content)
+
+    return {
+        "messages": [AIMessage(content=f"Career Planning roadmap saved to {file_path}", name="career_planning_agent")],
+        "termination_signal": True
+    }

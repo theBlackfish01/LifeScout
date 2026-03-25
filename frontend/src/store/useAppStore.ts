@@ -3,6 +3,9 @@ import type { AgentType, ChatMessage, UserProfile, Task, Artifact, Notification 
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
+// Pending messages queued while WebSocket is connecting
+type PendingMessage = { message: string; active_agent: AgentType };
+
 interface AppState {
     // --- Agent Routing ---
     activeAgent: AgentType;
@@ -31,6 +34,7 @@ interface AppState {
     // --- WebSocket ---
     ws: WebSocket | null;
     threadId: string;
+    pendingQueue: PendingMessage[];
     connectWs: (threadId: string) => void;
     disconnectWs: () => void;
     sendMessage: (text: string) => void;
@@ -106,6 +110,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // --- WebSocket ---
     ws: null,
     threadId: "default-thread",
+    pendingQueue: [],
     connectWs: (threadId) => {
         const existing = get().ws;
         // Guard: skip if already connected to this exact thread
@@ -126,6 +131,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         socket.onopen = () => {
             console.log("[WS] Connected to", threadId);
             set({ ws: socket });
+
+            // Flush any messages that were queued while connecting
+            const queue = get().pendingQueue;
+            if (queue.length > 0) {
+                for (const pending of queue) {
+                    socket.send(JSON.stringify(pending));
+                }
+                set({ pendingQueue: [] });
+            }
         };
 
         socket.onmessage = (event) => {
@@ -172,7 +186,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const ws = get().ws;
         if (ws) {
             ws.close();
-            set({ ws: null });
+            set({ ws: null, pendingQueue: [] });
         }
     },
 
@@ -188,18 +202,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         };
         get().addMessage(userMsg);
 
-        // Ensure WebSocket is connected
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-            connectWs(threadId);
-            // Wait briefly for connection then send
-            setTimeout(() => {
-                const currentWs = get().ws;
-                if (currentWs && currentWs.readyState === WebSocket.OPEN) {
-                    currentWs.send(JSON.stringify({ message: text, active_agent: activeAgent }));
-                }
-            }, 500);
+        const payload: PendingMessage = { message: text, active_agent: activeAgent };
+
+        // Send immediately if connected, otherwise queue and connect
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(payload));
         } else {
-            ws.send(JSON.stringify({ message: text, active_agent: activeAgent }));
+            set((s) => ({ pendingQueue: [...s.pendingQueue, payload] }));
+            connectWs(threadId);
         }
     },
 

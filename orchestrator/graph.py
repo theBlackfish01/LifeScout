@@ -54,10 +54,7 @@ def create_stub_branch(group_name: str) -> StateGraph:
     # Add cyclical edges based on the return state of the supervisor node mapping to actual node names
     # Supervisor routes back to 'agent_name' or END 
     def route_next(state: AgentState) -> str:
-        # Check standard state representation of the override flag since we manually passed it
-        # Under normal conditions `next` operates per-cycle. Here we mocked it tightly.
-        messages = state.get("messages", [])
-        if messages and "Budget Exceeded" in messages[-1].content:
+        if state.get("termination_signal"):
             return END
         if "next" in state and state["next"] == "__end__":
             return END
@@ -90,20 +87,14 @@ def create_career_branch() -> StateGraph:
     branch.add_edge(START, "supervisor")
     
     def route_next(state: AgentState) -> str:
-        messages = state.get("messages", [])
-        if messages:
-            last_msg = messages[-1]
-            if isinstance(last_msg, AIMessage):
-                content = last_msg.content
-                if "[SYSTEM]" in content or "Generated" in content or "Saved artifact" in content:
-                    return END
-        
+        if state.get("termination_signal"):
+            return END
         nxt = state.get("next", "__end__")
         return END if nxt == "__end__" else nxt
-        
+
     branch.add_conditional_edges(
-        "supervisor", 
-        route_next, 
+        "supervisor",
+        route_next,
         {
             "resume_agent": "resume_agent",
             "job_search_agent": "job_search_agent",
@@ -141,24 +132,14 @@ def create_life_branch() -> StateGraph:
     branch.add_edge(START, "supervisor")
     
     def route_next(state: AgentState) -> str:
-        messages = state.get("messages", [])
-        if messages:
-            last_msg = messages[-1]
-            if isinstance(last_msg, AIMessage):
-                content = last_msg.content
-                if "[SYSTEM]" in content or "Generated" in content or "Saved artifact" in content:
-                    return END
-        
-        # In test mocks without supervisor output, force END after agent completion
-        if state.get("active_agent") == "life" and any(isinstance(m, AIMessage) and ("Generated" in m.content or "Saved artifact" in m.content) for m in messages):
+        if state.get("termination_signal"):
             return END
-            
         nxt = state.get("next", "__end__")
         return END if nxt == "__end__" else nxt
-        
+
     branch.add_conditional_edges(
-        "supervisor", 
-        route_next, 
+        "supervisor",
+        route_next,
         {
             "goals_agent": "goals_agent",
             "habits_agent": "habits_agent",
@@ -191,24 +172,14 @@ def create_learning_branch() -> StateGraph:
     branch.add_edge(START, "supervisor")
     
     def route_next(state: AgentState) -> str:
-        messages = state.get("messages", [])
-        if messages:
-            last_msg = messages[-1]
-            if isinstance(last_msg, AIMessage):
-                content = last_msg.content
-                if "[SYSTEM]" in content or "Generated" in content or "Saved artifact" in content:
-                    return END
-        
-        # In test mocks without supervisor output, force END after agent completion
-        if state.get("active_agent") == "learning" and any(isinstance(m, AIMessage) and ("Generated" in m.content or "Saved artifact" in m.content) for m in messages):
+        if state.get("termination_signal"):
             return END
-            
         nxt = state.get("next", "__end__")
         return END if nxt == "__end__" else nxt
-        
+
     branch.add_conditional_edges(
-        "supervisor", 
-        route_next, 
+        "supervisor",
+        route_next,
         {
             "study_plan_agent": "study_plan_agent",
             "course_rec_agent": "course_rec_agent",
@@ -227,13 +198,16 @@ def create_learning_branch() -> StateGraph:
 # --- Build the Main Orchestrator Graph ---
 
 def router_node(state: AgentState) -> dict:
-    # A standalone node isn't strictly necessary for pure conditional routing from START,
-    # but is useful for logging logic or initializing stats.
-    # We ensure budget stats are ready.
-    if "budget_stats" not in state or not state["budget_stats"]:
-        import time
-        return {"budget_stats": {"iterations": 0, "tool_calls": 0, "start_time": time.time()}}
-    return {}
+    import time
+    # Refresh start_time on every invocation — budget timing is per-request, not
+    # cumulative across turns.  Preserve any iterations/tool_calls already set by
+    # the caller (e.g. test states that seed a blown budget).
+    stats = state.get("budget_stats") or {}
+    return {"budget_stats": {
+        "iterations": stats.get("iterations", 0),
+        "tool_calls": stats.get("tool_calls", 0),
+        "start_time": time.time(),
+    }}
 
 def route_to_group(state: AgentState) -> str:
     """The central routing determinant reading active_agent from state."""

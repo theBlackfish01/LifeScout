@@ -1,4 +1,3 @@
-from pathlib import Path
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -8,6 +7,7 @@ from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
 from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search
+from tools.save_artifact import save_artifact
 
 PROMPT = """You are the LifeScout Interview Prep Coach Sub-Agent.
 You are tough, analytical, but highly constructive. Your job is to simulate interview scenarios, generate specific Q&A, and identify skill gaps.
@@ -64,12 +64,10 @@ def interview_prep_agent_node(state: AgentState) -> dict:
         print(f"[Interview Prep Agent] ReAct execution error: {e}")
         final_content = f"Interview prep encountered an error: {str(e)}"
     
-    artifact_dir = Path(settings.data_dir) / "career" / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     task_id = state.get("task_id", "manual")
-    file_path = artifact_dir / f"interview_prep_{task_id}.md"
-    
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(final_content)
-        
-    return {"messages": [AIMessage(content=f"Generated Interview Prep report and saved artifact to {file_path}", name="interview_prep_agent")]}
+    file_path = save_artifact("career", "interview_prep", task_id, final_content)
+
+    return {
+        "messages": [AIMessage(content=f"Interview Prep report saved to {file_path}", name="interview_prep_agent")],
+        "termination_signal": True
+    }
