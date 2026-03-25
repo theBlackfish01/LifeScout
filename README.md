@@ -1,7 +1,7 @@
-# Life Scouter
+# Life Scout
 
 ## Overview
-Life Scouter is an AI-powered personal assistant built on LangGraph, featuring a decoupled Next.js frontend and FastAPI backend with a two-level supervisor architecture.
+Life Scout is an AI-powered personal assistant built on LangGraph, featuring a decoupled Next.js frontend and FastAPI backend with a two-level supervisor architecture.
 
 Three domain agent groups — **Career**, **Life**, and **Learning** — each managed by a supervisor that routes user requests to specialized sub-agents. Agents use Google Gemini via LangChain, with Tavily search and web scraping as external tools.
 
