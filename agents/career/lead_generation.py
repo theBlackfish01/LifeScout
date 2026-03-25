@@ -1,4 +1,3 @@
-from pathlib import Path
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -9,6 +8,7 @@ from context.artifact_loader import ArtifactLoader
 from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search, search_jobs
 from tools.web_scraper import robust_web_scrape
+from tools.save_artifact import save_artifact
 
 PROMPT = """You are the LifeScout Career Lead Generation Sub-Agent.
 Your job is to proactively find high-quality career opportunities and evaluate leads against the user profile.
@@ -70,12 +70,10 @@ def lead_generation_agent_node(state: AgentState) -> dict:
         print(f"[Lead Gen Agent] ReAct execution error: {e}")
         final_content = f"Lead generation encountered an error: {str(e)}"
     
-    artifact_dir = Path(settings.data_dir) / "career" / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     task_id = state.get("task_id", "manual")
-    file_path = artifact_dir / f"lead_batch_{task_id}.md"
-    
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(final_content)
-        
-    return {"messages": [AIMessage(content=final_content, name="lead_generation_agent")]}
+    save_artifact("career", "lead_batch", task_id, final_content)
+
+    return {
+        "messages": [AIMessage(content=final_content, name="lead_generation_agent")],
+        "termination_signal": True
+    }

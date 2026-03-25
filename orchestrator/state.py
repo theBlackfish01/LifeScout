@@ -18,3 +18,4 @@ class AgentState(TypedDict):
     task_id: str           # UUID of the active Task
     budget_stats: BudgetStats
     next: str              # Routing flag used natively by our sub-graph logic
+    termination_signal: bool  # Set True by agents/supervisors to signal graph should terminate

@@ -1,97 +1,120 @@
-import os
+"""
+Life agent group tests.
+
+Unit tests: concurrency guard (no LLM required).
+Integration tests: routing, artifact generation, therapy disclaimer (require GEMINI_API_KEY).
+"""
 import shutil
+import pytest
 from pathlib import Path
 from langchain_core.messages import HumanMessage
 from orchestrator.graph import orchestrator_graph
+from orchestrator.checkpoint import get_checkpoint_config
 from models.task import Task
-from context.task_manager import task_manager
 from config.settings import settings
 
-def run_tests():
-    print("Testing Life Agent Group...")
-    
-    # Clean previous artifacts if any
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def clean_life_artifacts():
     artifact_dir = Path(settings.data_dir) / "life" / "artifacts"
     if artifact_dir.exists():
         shutil.rmtree(artifact_dir)
-        
-    # 1. Test Concurrency
-    print("\n--- Testing Concurrency ---")
-    t1 = Task(trigger="user_initiated", agent_group="life", sub_agent="health", title="Health 1", thread_id="t1")
-    t2 = Task(trigger="user_initiated", agent_group="life", sub_agent="health", title="Health 2", thread_id="t2")
-    
-    task_manager.register_task(t1)
-    task_manager.register_task(t2)
-    
-    state2 = {
-        "messages": [HumanMessage(content="Give me a gym routine")],
-        "active_agent": "life",
-        "task_id": t2.id
-    }
-    config2 = {"configurable": {"thread_id": "life_t2"}}
-    result2 = orchestrator_graph.invoke(state2, config=config2)
-    
-    messages = result2.get("messages", [])
-    concurrency_met = False
-    for msg in messages:
-        if hasattr(msg, "name") and msg.name == "life_supervisor":
-            if "pending due to concurrency limits" in msg.content:
-                concurrency_met = True
-                print(f"Concurrent submission result: {msg.content}")
-                
-    assert concurrency_met, "Concurrency guard failed. Second task was not queued."
-    
-    # Finish T1 manually so T2 can run
-    t1.status = "completed"
-    task_manager.update_task(t1)
-    
-    # 2. Test Routing and Artifact Generation
-    print("\n--- Testing Routing & Artifact Generation ---")
-    state_valid = {
+    yield
+
+
+@pytest.fixture
+def running_life_task(reset_task_manager):
+    t = Task(
+        trigger="user_initiated", agent_group="life",
+        sub_agent="health", title="Health 1", thread_id="l1"
+    )
+    reset_task_manager.register_task(t)
+    return t
+
+
+@pytest.fixture
+def pending_life_task(reset_task_manager, running_life_task):
+    t = Task(
+        trigger="user_initiated", agent_group="life",
+        sub_agent="health", title="Health 2", thread_id="l2"
+    )
+    reset_task_manager.register_task(t)
+    return t
+
+
+# ---------------------------------------------------------------------------
+# Unit: concurrency guard (no LLM required)
+# ---------------------------------------------------------------------------
+
+def test_second_life_task_queued_as_pending(running_life_task, pending_life_task, reset_task_manager):
+    assert reset_task_manager.get_task(running_life_task.id).status == "running"
+    assert reset_task_manager.get_task(pending_life_task.id).status == "pending"
+
+
+# ---------------------------------------------------------------------------
+# Integration: routing, artifacts, and safety checks (require GEMINI_API_KEY)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.integration
+def test_life_routes_to_health_agent(require_gemini_key, running_life_task, reset_task_manager):
+    running_life_task.status = "completed"
+    reset_task_manager.update_task(running_life_task)
+
+    task_id = "integ_health_task"
+    config = get_checkpoint_config("life", "integ_life_health")
+    state = {
         "messages": [HumanMessage(content="Build me a marathon training health routine.")],
         "active_agent": "life",
-        "task_id": t2.id
+        "task_id": task_id,
     }
-    
-    result_valid = orchestrator_graph.invoke(state_valid, config=config2)
-    final_messages = result_valid.get("messages", [])
-    
-    found_health = False
-    for msg in final_messages:
-        if hasattr(msg, "name") and msg.name == "health_agent":
-            print(f"Agent response: {msg.content}")
-            found_health = True
-            
-    assert found_health, "Life supervisor failed to route to health_agent natively."
-    
-    # Assert artifact exists
-    assert artifact_dir.exists(), "Artifacts directory not created."
-    files = list(artifact_dir.glob(f"health_{t2.id}.md"))
-    assert len(files) == 1, "Health plan artifact file was not serialized."
-    print("Routing and Artifacts verified.")
+    result = orchestrator_graph.invoke(state, config=config)
+    messages = result.get("messages", [])
 
-    # 3. Test Therapy Disclaimer 
-    print("\n--- Testing Therapy Disclaimer Safety Requirement ---")
-    state_therapy = {
-         "messages": [HumanMessage(content="I am feeling extremely stressed from work, can you give me some journaling tips?")],
-         "active_agent": "life",
-         "task_id": t2.id
+    agent_names = [getattr(m, "name", None) for m in messages]
+    assert "health_agent" in agent_names, f"health_agent not found in {agent_names}"
+
+    artifact_dir = Path(settings.data_dir) / "life" / "artifacts"
+    artifacts = list(artifact_dir.glob(f"health_{task_id}*.md"))
+    assert artifacts, "Health plan artifact was not written to disk"
+    assert artifacts[0].stat().st_size > 50
+
+
+@pytest.mark.integration
+def test_therapy_disclaimer_always_present(require_gemini_key, running_life_task, reset_task_manager):
+    """therapy_agent MUST prepend the safety disclaimer in its response."""
+    running_life_task.status = "completed"
+    reset_task_manager.update_task(running_life_task)
+
+    config = get_checkpoint_config("life", "integ_life_therapy")
+    state = {
+        "messages": [HumanMessage(content="I'm feeling overwhelmed by work stress. Give me journaling tips.")],
+        "active_agent": "life",
+        "task_id": "integ_therapy_task",
     }
-    
-    result_therapy = orchestrator_graph.invoke(state_therapy, config=config2)
-    therapy_messages = result_therapy.get("messages", [])
-    
-    disclaimer_found = False
-    for msg in therapy_messages:
-         if hasattr(msg, "name") and msg.name == "therapy_agent":
-              print(f"Therapy Agent Response:\n{msg.content[:150]}...\n")
-              if "I am not a professional therapist" in msg.content:
-                  disclaimer_found = True
-                  
-    assert disclaimer_found, "CRITICAL ERROR: Therapy Sub-Agent failed to prepend the mandatory safety disclaimer!"
-    print("Therapy Disclaimer Verified.")
+    result = orchestrator_graph.invoke(state, config=config)
+    messages = result.get("messages", [])
 
-    print("\nAll Life Agent Validations Passed Successfully.")
+    therapy_msgs = [m for m in messages if getattr(m, "name", None) == "therapy_agent"]
+    assert therapy_msgs, "therapy_agent message not found in result"
+    assert "I am not a professional therapist" in therapy_msgs[0].content, (
+        "CRITICAL: therapy_agent did not include mandatory safety disclaimer"
+    )
 
-if __name__ == "__main__":
-    run_tests()
+
+@pytest.mark.integration
+def test_life_sets_termination_signal(require_gemini_key, running_life_task, reset_task_manager):
+    running_life_task.status = "completed"
+    reset_task_manager.update_task(running_life_task)
+
+    config = get_checkpoint_config("life", "integ_life_term_signal")
+    state = {
+        "messages": [HumanMessage(content="Help me build a habit tracking plan.")],
+        "active_agent": "life",
+        "task_id": "integ_habits_task",
+    }
+    result = orchestrator_graph.invoke(state, config=config)
+    assert result.get("termination_signal") is True

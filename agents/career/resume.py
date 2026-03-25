@@ -1,4 +1,3 @@
-from pathlib import Path
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -8,6 +7,7 @@ from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
 from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search
+from tools.save_artifact import save_artifact
 
 RESUME_PROMPT = """You are the LifeScout Resume Sub-Agent.
 Your job is to generate and optimize CVs based on the user's profile and requests.
@@ -64,12 +64,10 @@ def resume_agent_node(state: AgentState) -> dict:
         print(f"[Resume Agent] ReAct execution error: {e}")
         final_content = f"Resume generation encountered an error: {str(e)}"
     
-    artifact_dir = Path(settings.data_dir) / "career" / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     task_id = state.get("task_id", "manual")
-    file_path = artifact_dir / f"resume_{task_id}.md"
-    
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(final_content)
-        
-    return {"messages": [AIMessage(content=f"Generated resume and saved artifact to {file_path}\n\n{final_content[:500]}...", name="resume_agent")]}
+    file_path = save_artifact("career", "resume", task_id, final_content)
+
+    return {
+        "messages": [AIMessage(content=f"Resume saved to {file_path}\n\n{final_content[:500]}...", name="resume_agent")],
+        "termination_signal": True
+    }

@@ -1,4 +1,3 @@
-from pathlib import Path
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
@@ -9,6 +8,7 @@ from context.artifact_loader import ArtifactLoader
 from context.memory_distiller import MemoryDistiller
 from tools.search import tavily_search, search_courses
 from tools.web_scraper import robust_web_scrape
+from tools.save_artifact import save_artifact
 
 PROMPT = """You are the LifeScout Learning Course Recommendation Sub-Agent.
 Your job is to recommend REAL online courses, textbooks, and tutorials based on the user's learning goals.
@@ -64,15 +64,11 @@ def course_rec_agent_node(state: AgentState) -> dict:
         print(f"[Course Rec Agent] ReAct execution error: {e}")
         final_content = f"Course recommendation encountered an error: {str(e)}"
     
-    artifact_dir = Path(settings.data_dir) / "learning" / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     task_id = state.get("task_id", "manual")
-    file_path = artifact_dir / f"course_recs_{task_id}.md"
-    
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(final_content)
-        
+    save_artifact("learning", "course_recs", task_id, final_content)
+
     return {
         "messages": [AIMessage(content=final_content, name="course_rec_agent")],
-        "next": "__end__"
+        "next": "__end__",
+        "termination_signal": True
     }

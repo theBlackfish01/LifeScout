@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     model_low_complexity: str = "gemini-3.1-pro-preview" # Goals, Habits, Health, Course Rec, Progress
     model_high_complexity: str = "gemini-3.1-pro-preview"  # Fallback since pro tier endpoints string might vary. For now just stick to flash for safety.
 
+    # LangSmith Tracing (optional — all tracing is no-op when api_key is empty)
+    langsmith_api_key: str = os.getenv("LANGSMITH_API_KEY", "")
+    langsmith_project: str = os.getenv("LANGSMITH_PROJECT", "lifescouter")
+
     # File System Root Paths
     data_dir: str = "data"
     checkpoints_dir: str = "data/checkpoints"

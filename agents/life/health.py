@@ -1,4 +1,3 @@
-from pathlib import Path
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from config.settings import settings
@@ -6,6 +5,7 @@ from orchestrator.state import AgentState
 from context.profile_manager import ProfileManager
 from context.artifact_loader import ArtifactLoader
 from context.memory_distiller import MemoryDistiller
+from tools.save_artifact import save_artifact
 
 PROMPT = """You are the LifeScout Health & Wellness Sub-Agent.
 Your job is to build fitness and wellness plans based on the user's profile and constraints.
@@ -43,15 +43,11 @@ def health_agent_node(state: AgentState) -> dict:
     
     response = llm.invoke(formatted)
     
-    artifact_dir = Path(settings.data_dir) / "life" / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     task_id = state.get("task_id", "manual")
-    file_path = artifact_dir / f"health_{task_id}.md"
-    
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(response.content)
-        
+    file_path = save_artifact("life", "health", task_id, response.content)
+
     return {
-        "messages": [AIMessage(content=f"Generated health plan and saved artifact to {file_path}", name="health_agent")],
-        "next": "__end__"
+        "messages": [AIMessage(content=f"Health plan saved to {file_path}", name="health_agent")],
+        "next": "__end__",
+        "termination_signal": True
     }

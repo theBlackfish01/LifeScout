@@ -4,17 +4,36 @@ Handles bidirectional communication: receives user messages and streams
 back LangGraph execution results (AI responses, status updates) in real-time.
 """
 import asyncio
+import json
 import traceback
+from pathlib import Path
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from langchain_core.messages import HumanMessage, AIMessage
 
 from api.connection_manager import manager
 from orchestrator.graph import orchestrator_graph
+from orchestrator.checkpoint import get_checkpoint_config
 from context.profile_manager import ProfileManager
+from context.memory_distiller import MemoryDistiller
+from observability.cost_tracker import cost_tracker, CostCallbackHandler
 
 router = APIRouter(tags=["Chat"])
 
 profile_mgr = ProfileManager()
+
+
+def _safe_distill(messages: list, agent_group: str) -> None:
+    """Run memory distillation with graceful corruption recovery."""
+    try:
+        MemoryDistiller.distill(messages, agent_group)
+    except json.JSONDecodeError:
+        # Corrupted store — reset it so future distillations can proceed
+        store_path = MemoryDistiller.STORE_PATH
+        print(f"[Chat WS] Corrupted memory store at {store_path}, resetting.")
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        store_path.write_text("{}", encoding="utf-8")
+    except Exception as e:
+        print(f"[Chat WS] Memory distillation failed (non-fatal): {e}")
 
 
 @router.websocket("/api/chat/{thread_id}")
@@ -46,8 +65,10 @@ async def websocket_chat(websocket: WebSocket, thread_id: str):
             # 2. Send a processing status
             await websocket.send_json({"type": "status", "content": "processing"})
 
-            # 3. Build the LangGraph state
-            config = {"configurable": {"thread_id": thread_id}}
+            # 3. Build the LangGraph state with namespaced checkpoint config
+            config = get_checkpoint_config(active_agent, thread_id)
+            cost_cb = CostCallbackHandler(cost_tracker, thread_id)
+            config["callbacks"] = [cost_cb]
             input_messages = [HumanMessage(content=user_message)]
             input_count = len(input_messages)
 
@@ -78,19 +99,15 @@ async def websocket_chat(websocket: WebSocket, thread_id: str):
                                 "agent_name": getattr(msg, "name", None) or "assistant",
                             })
 
-                # Trigger asynchronous memory distillation
-                try:
-                    from context.memory_distiller import MemoryDistiller
-                    ai_msgs = [m for m in result.get("messages", []) if isinstance(m, AIMessage)]
-                    if ai_msgs:
-                        await loop.run_in_executor(
-                            None,
-                            lambda: MemoryDistiller.distill(result["messages"], active_agent)
-                        )
-                except Exception as de:
-                    print(f"[Chat WS] Memory distillation error (non-fatal): {de}")
+                # 6. Trigger asynchronous memory distillation with error recovery
+                ai_msgs = [m for m in result.get("messages", []) if isinstance(m, AIMessage)]
+                if ai_msgs:
+                    await loop.run_in_executor(
+                        None,
+                        lambda: _safe_distill(result["messages"], active_agent)
+                    )
 
-                # 6. If no AI message was produced, send a helpful fallback
+                # 7. If no AI message was produced, send a helpful fallback
                 if not ai_found:
                     await websocket.send_json({
                         "type": "ai_message",
@@ -98,7 +115,7 @@ async def websocket_chat(websocket: WebSocket, thread_id: str):
                         "agent_name": f"{active_agent}_agent",
                     })
 
-                # 7. Signal completion
+                # 8. Signal completion
                 await websocket.send_json({"type": "done"})
 
             except Exception as e:
